@@ -18,14 +18,14 @@ impl HttpClient {
         let ips = lookup_host(&host)
             .map_err(|e| Error::Network(format!("Failed to find IP addresses: {:#?}", e)))?;
 
-        if ips.len() < 1 {
+        if ips.is_empty() {
             return Err(Error::Network("Failed to find IP addresses".to_string()));
         }
 
         let socket_addr: SocketAddr = (ips[0], port).into();
 
         let mut stream = TcpStream::connect(socket_addr)
-            .map_err(|_| Err("Failed to connect to TCP stream".to_string()))?;
+            .map_err(|_| Error::Network("Failed to connect to TCP stream".to_string()))?;
 
         let mut request = String::from("GET /");
         request.push_str(&path);
