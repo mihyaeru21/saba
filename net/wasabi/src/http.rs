@@ -7,13 +7,10 @@ use noli::net::{SocketAddr, TcpStream, lookup_host};
 use saba_core::error::Error;
 use saba_core::http::HttpResponse;
 
+#[derive(Default)]
 pub struct HttpClient {}
 
 impl HttpClient {
-    pub fn new() -> Self {
-        Self {}
-    }
-
     pub fn get(&self, host: String, port: u16, path: String) -> Result<HttpResponse, Error> {
         let ips = lookup_host(&host)
             .map_err(|e| Error::Network(format!("Failed to find IP addresses: {:#?}", e)))?;
