@@ -39,16 +39,16 @@ impl HtmlTokenizer {
         self.input[self.pos - 1]
     }
 
-    fn create_tag(&mut self, start_tag_token: bool) {
-        if start_tag_token {
-            self.latest_token = Some(HtmlToken::StartTag {
-                tag: String::new(),
-                self_closing: false,
-                attributes: Vec::new(),
-            });
-        } else {
-            self.latest_token = Some(HtmlToken::EndTag { tag: String::new() });
-        }
+    fn create_start_tag(&mut self) {
+        self.latest_token = Some(HtmlToken::StartTag {
+            tag: String::new(),
+            self_closing: false,
+            attributes: Vec::new(),
+        });
+    }
+
+    fn create_end_tag(&mut self) {
+        self.latest_token = Some(HtmlToken::EndTag { tag: String::new() });
     }
 
     fn append_tag_name(&mut self, c: char) {
@@ -132,7 +132,11 @@ impl HtmlTokenizer {
         };
 
         match token {
-            HtmlToken::StartTag { tag: _, self_closing, attributes: _ } => *self_closing = true,
+            HtmlToken::StartTag {
+                tag: _,
+                self_closing,
+                attributes: _,
+            } => *self_closing = true,
             _ => panic!("`latest_token` should be either StartTag"),
         }
     }
@@ -174,7 +178,7 @@ impl Iterator for HtmlTokenizer {
                     if c.is_ascii_alphabetic() {
                         self.reconsume = true;
                         self.state = State::TagName;
-                        self.create_tag(true);
+                        self.create_start_tag();
                         continue;
                     }
 
@@ -193,7 +197,7 @@ impl Iterator for HtmlTokenizer {
                     if c.is_ascii_alphabetic() {
                         self.reconsume = true;
                         self.state = State::TagName;
-                        self.create_tag(false);
+                        self.create_end_tag();
                         continue;
                     }
                 }
@@ -389,7 +393,64 @@ impl Iterator for HtmlTokenizer {
 
                     return Some(HtmlToken::Char(c));
                 }
-                _ => {}
+                State::ScriptDataLessThanSign => {
+                    if c == '/' {
+                        self.buf = String::new();
+                        self.state = State::ScriptDataEndTagOpen;
+                        continue;
+                    }
+
+                    self.reconsume = true;
+                    self.state = State::ScriptData;
+                    return Some(HtmlToken::Char('<'));
+                }
+                State::ScriptDataEndTagOpen => {
+                    if c.is_ascii_alphabetic() {
+                        self.reconsume = true;
+                        self.state = State::ScriptDataEndTagName;
+                        self.create_end_tag();
+                        continue;
+                    }
+
+                    self.reconsume = true;
+                    self.state = State::ScriptData;
+                    // 仕様では、"<" と "/" の 2 つの文字トークンを返すとなっているが、
+                    // 私たちの実装では next メソッドからは一つのトークンしか返せない
+                    // ため、"<" のトークンのみを返す
+                    return Some(HtmlToken::Char('<'));
+                }
+                State::ScriptDataEndTagName => {
+                    if c == '>' {
+                        self.state = State::Data;
+                        return self.take_latest_token();
+                    }
+
+                    if c.is_ascii_alphabetic() {
+                        self.buf.push(c);
+                        self.append_tag_name(c.to_ascii_lowercase());
+                        continue;
+                    }
+
+                    self.state = State::TemporaryBuffer;
+                    self.buf = String::from("</") + &self.buf;
+                    self.buf.push(c);
+                    continue;
+                }
+                State::TemporaryBuffer => {
+                    self.reconsume = true;
+                    if self.buf.chars().count() == 0 {
+                        self.state = State::ScriptData;
+                        continue;
+                    }
+
+                    let c = self
+                        .buf
+                        .chars()
+                        .nth(0)
+                        .expect("self.buf should have at least 1 char");
+                    self.buf.remove(0);
+                    return Some(HtmlToken::Char(c));
+                }
             }
         }
     }
