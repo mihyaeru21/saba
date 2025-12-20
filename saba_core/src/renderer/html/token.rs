@@ -118,7 +118,11 @@ impl HtmlTokenizer {
                 let len = attributes.len();
                 assert!(len > 0);
 
-                attributes[len - 1].add_char(c, is_name);
+                if is_name {
+                    attributes[len - 1].add_name_char(c);
+                } else {
+                    attributes[len - 1].add_value_char(c);
+                }
             }
             _ => panic!("`latest_token` should be eigher StartTag"),
         }
@@ -493,4 +497,104 @@ pub enum State {
     ScriptDataEndTagOpen,
     ScriptDataEndTagName,
     TemporaryBuffer,
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::{string::ToString, vec};
+
+    use super::*;
+
+    #[test]
+    fn test_empty() {
+        let html = "".to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+        assert!(tokenizer.next().is_none());
+    }
+
+    #[test]
+    fn test_start_and_end_tag() {
+        let html = "<body></body>".to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+
+        let expected = [
+            HtmlToken::StartTag {
+                tag: "body".to_string(),
+                self_closing: false,
+                attributes: Vec::new(),
+            },
+            HtmlToken::EndTag {
+                tag: "body".to_string(),
+            },
+        ];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next())
+        }
+    }
+
+    #[test]
+    fn test_attributes() {
+        let html = r#"<p class="A" id='B' foo=bar></p>"#.to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+        let attr1 = Attribute::nv("class", "A");
+        let attr2 = Attribute::nv("id", "B");
+        let attr3 = Attribute::nv("foo", "bar");
+
+        let expected = [
+            HtmlToken::StartTag {
+                tag: "p".to_string(),
+                self_closing: false,
+                attributes: vec![attr1, attr2, attr3],
+            },
+            HtmlToken::EndTag {
+                tag: "p".to_string(),
+            },
+        ];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next());
+        }
+    }
+
+    #[test]
+    fn test_self_closing_tag() {
+        let html = r#"<img />"#.to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+
+        let expected = [HtmlToken::StartTag {
+            tag: "img".to_string(),
+            self_closing: true,
+            attributes: Vec::new(),
+        }];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next());
+        }
+    }
+
+    #[test]
+    fn test_script_tag() {
+        let html = r#"<script>js code;</script>"#.to_string();
+        let mut tokenizer = HtmlTokenizer::new(html);
+
+        let expected = [
+            HtmlToken::StartTag {
+                tag: "script".to_string(),
+                self_closing: false,
+                attributes: Vec::new(),
+            },
+            HtmlToken::Char('j'),
+            HtmlToken::Char('s'),
+            HtmlToken::Char(' '),
+            HtmlToken::Char('c'),
+            HtmlToken::Char('o'),
+            HtmlToken::Char('d'),
+            HtmlToken::Char('e'),
+            HtmlToken::Char(';'),
+            HtmlToken::EndTag {
+                tag: "script".to_string(),
+            },
+        ];
+        for e in expected {
+            assert_eq!(Some(e), tokenizer.next());
+        }
+    }
 }
