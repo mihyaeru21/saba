@@ -9,7 +9,7 @@ use noli::prelude::*;
 
 fn main() -> u64 {
     let client = HttpClient::default();
-    match client.get("host.test".to_string(), 8000, "/test.html".to_string()) {
+    match client.get("host.test".to_string(), 8000, "test.html".to_string()) {
         Ok(res) => {
             print!("response:\n{:#?}", res);
         }

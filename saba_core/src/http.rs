@@ -17,7 +17,7 @@ pub struct HttpResponse {
 
 impl HttpResponse {
     pub fn new(raw_response: String) -> Result<Self, Error> {
-        let preprocessed_response = raw_response.trim_start().replace("\n\r", "\n");
+        let preprocessed_response = raw_response.trim_start().replace("\r\n", "\n");
 
         let (status_line, remaining) = preprocessed_response.split_once('\n').ok_or_else(|| {
             Error::Network(format!("invalid http response: {preprocessed_response}"))

@@ -371,7 +371,7 @@ impl Iterator for HtmlTokenizer {
                     }
 
                     self.reconsume = true;
-                    self.state = State::BeforeAttributeValue;
+                    self.state = State::BeforeAttributeName;
                 }
                 State::SelfClosingStartTag => {
                     if c == '>' {
