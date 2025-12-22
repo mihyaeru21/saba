@@ -1,4 +1,4 @@
-use alloc::{rc::Rc, vec::Vec};
+use alloc::{rc::Rc, string::String, vec::Vec};
 use core::{cell::RefCell, str::FromStr};
 
 use crate::renderer::{
@@ -329,6 +329,53 @@ impl HtmlParser {
         node.borrow_mut().set_parent(Rc::downgrade(&current));
 
         self.stack_of_open_elements.push(node);
+    }
+
+    fn pop_current_node(&mut self, element_kind: ElementKind) -> bool {
+        let Some(current) = self.stack_of_open_elements.last() else {
+            return false;
+        };
+
+        if current.borrow().element_kind() == Some(element_kind) {
+            self.stack_of_open_elements.pop();
+            return true;
+        }
+
+        false
+    }
+
+    fn pop_until(&mut self, element_kind: ElementKind) {
+        assert!(
+            self.contain_in_stack(element_kind),
+            "stack doesn't have an element {:?}",
+            element_kind
+        );
+
+        loop {
+            let Some(current) = self.stack_of_open_elements.pop() else {
+                return;
+            };
+
+            if current.borrow().element_kind() == Some(element_kind) {
+                return;
+            }
+        }
+    }
+
+    fn contain_in_stack(&mut self, element_kind: ElementKind) -> bool {
+        for i in 0..self.stack_of_open_elements.len() {
+            if self.stack_of_open_elements[i].borrow().element_kind() == Some(element_kind) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn create_char(&self, c: char) -> Node {
+        let mut s = String::new();
+        s.push(c);
+        Node::new(NodeKind::Text(s))
     }
 }
 
