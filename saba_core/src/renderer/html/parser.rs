@@ -377,6 +377,39 @@ impl HtmlParser {
         s.push(c);
         Node::new(NodeKind::Text(s))
     }
+
+    fn insert_char(&mut self, c: char) {
+        let Some(current) = self.stack_of_open_elements.last() else {
+            return;
+        };
+
+        if let NodeKind::Text(ref mut s) = current.borrow_mut().kind {
+            s.push(c);
+            return;
+        }
+
+        if c == '\n' || c == ' ' {
+            return;
+        }
+
+        let node = Rc::new(RefCell::new(self.create_char(c)));
+
+        if let Some(first_child) = current.borrow().first_child() {
+            first_child
+                .borrow_mut()
+                .set_next_sibling(Some(node.clone()));
+            // TODO: 正誤表で消されてるけど、構造としては previous_sibling に設定すべきに見える？
+            // node.borrow_mut()
+            //     .set_previous_sibling(Rc::downgrade(&first_child));
+        } else {
+            current.borrow_mut().set_first_child(Some(node.clone()));
+        }
+
+        current.borrow_mut().set_last_child(Rc::downgrade(&node));
+        node.borrow_mut().set_parent(Rc::downgrade(current));
+
+        self.stack_of_open_elements.push(node);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
