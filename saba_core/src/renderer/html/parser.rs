@@ -447,3 +447,55 @@ pub enum InsertionMode {
     AfterBody,
     AfterAfterBody,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::alloc::string::ToString;
+
+    #[test]
+    fn test_empty() {
+        let html = "".to_string();
+        let t = HtmlTokenizer::new(html);
+        let window = HtmlParser::new(t).construct_tree();
+        let document = window.borrow().document();
+
+        assert_eq!(doc_node(), document);
+        assert_eq!(None, document.borrow().first_child())
+    }
+
+    #[test]
+    fn test_body_text() {
+        let html = "<html><head></head><body>text value</body></html>".to_string();
+        let t = HtmlTokenizer::new(html);
+        let window = HtmlParser::new(t).construct_tree();
+        let document = window.borrow().document();
+        assert_eq!(doc_node(), document);
+
+        let html = document.borrow().first_child().unwrap();
+        assert_eq!(elem_node("html", &[]), html);
+
+        let head = html.borrow().first_child().unwrap();
+        assert_eq!(elem_node("head", &[]), head);
+
+        let body = head.borrow().next_sibling().unwrap();
+        assert_eq!(elem_node("body", &[]), body);
+
+        let text = body.borrow().first_child().unwrap();
+        assert_eq!(text_node("text value"), text);
+    }
+
+    fn doc_node() -> Rc<RefCell<Node>> {
+        Rc::new(RefCell::new(Node::new(NodeKind::Document)))
+    }
+
+    fn elem_node(name: &str, attributes: &[Attribute]) -> Rc<RefCell<Node>> {
+        let kind = NodeKind::Element(Element::new(name, attributes.to_vec()));
+        Rc::new(RefCell::new(Node::new(kind)))
+    }
+
+    fn text_node(text: &str) -> Rc<RefCell<Node>> {
+        let kind = NodeKind::Text(text.to_string());
+        Rc::new(RefCell::new(Node::new(kind)))
+    }
+}
