@@ -31,7 +31,7 @@ impl HtmlParser {
 
     pub fn construct_tree(&mut self) -> Rc<RefCell<Window>> {
         let mut token = self.t.next();
-        while let Some(t) = token {
+        while let Some(ref t) = token {
             match self.mode {
                 InsertionMode::Initial => {
                     // 本書では、DOCTYPEトークンをサポートしていないため、
@@ -46,7 +46,7 @@ impl HtmlParser {
                     continue;
                 }
                 InsertionMode::BeforeHtml => {
-                    match t {
+                    match *t {
                         HtmlToken::Char(c) => {
                             if c == ' ' || c == '\n' {
                                 token = self.t.next();
@@ -77,7 +77,7 @@ impl HtmlParser {
                     continue;
                 }
                 InsertionMode::BeforeHead => {
-                    match t {
+                    match *t {
                         HtmlToken::Char(c) => {
                             if c == ' ' || c == '\n' {
                                 token = self.t.next();
@@ -108,7 +108,7 @@ impl HtmlParser {
                     continue;
                 }
                 InsertionMode::InHead => {
-                    match t {
+                    match *t {
                         HtmlToken::Char(c) => {
                             if c == ' ' || c == '\n' {
                                 self.insert_char(c);
@@ -160,7 +160,7 @@ impl HtmlParser {
                     continue;
                 }
                 InsertionMode::AfterHead => {
-                    match t {
+                    match *t {
                         HtmlToken::Char(c) => {
                             if c == ' ' || c == '\n' {
                                 self.insert_char(c);
@@ -191,7 +191,7 @@ impl HtmlParser {
                     continue;
                 }
                 InsertionMode::InBody => {
-                    match t {
+                    match *t {
                         HtmlToken::EndTag { ref tag } => {
                             match tag.as_str() {
                                 "body" => {
@@ -225,7 +225,7 @@ impl HtmlParser {
                     }
                 }
                 InsertionMode::Text => {
-                    match t {
+                    match *t {
                         HtmlToken::Eof => {
                             return self.window.clone();
                         }
@@ -254,7 +254,7 @@ impl HtmlParser {
                     self.mode = self.original_mode;
                 }
                 InsertionMode::AfterBody => {
-                    match t {
+                    match *t {
                         HtmlToken::Char(_c) => {
                             token = self.t.next();
                             continue;
