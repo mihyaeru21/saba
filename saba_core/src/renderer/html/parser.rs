@@ -197,7 +197,7 @@ impl HtmlParser {
                             self_closing: _,
                             ref attributes,
                         } => match tag.as_str() {
-                            "p" => {
+                            "p" | "h1" | "h2" | "a" | "span" => {
                                 self.insert_element(tag, attributes.to_vec());
                                 token = self.t.next();
                                 continue;
@@ -225,7 +225,7 @@ impl HtmlParser {
                                     }
                                     continue;
                                 }
-                                "p" => {
+                                "p" | "h1" | "h2" | "a" | "span" => {
                                     let element_kind = ElementKind::from_str(tag)
                                         .expect("failed to convert string to ElementKind");
                                     token = self.t.next();
@@ -240,7 +240,11 @@ impl HtmlParser {
                         HtmlToken::Eof => {
                             return self.window.clone();
                         }
-                        _ => {}
+                        HtmlToken::Char(c) => {
+                            self.insert_char(c);
+                            token = self.t.next();
+                            continue;
+                        }
                     }
                 }
                 InsertionMode::Text => {
