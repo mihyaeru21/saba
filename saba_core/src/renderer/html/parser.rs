@@ -485,6 +485,40 @@ mod tests {
         assert_eq!(text_node("text value"), text);
     }
 
+    #[test]
+    fn test_multiple_nodes() {
+        let html = r#"<html><head></head><body><p><a foo=bar>text value</a><span class="hoge">xxx</span></p></body></html>"#.to_string();
+        let t = HtmlTokenizer::new(html);
+        let window = HtmlParser::new(t).construct_tree();
+        let document = window.borrow().document();
+
+        let body = document
+            .borrow()
+            .first_child()
+            .unwrap()
+            .borrow()
+            .first_child()
+            .unwrap()
+            .borrow()
+            .next_sibling()
+            .unwrap();
+        assert_eq!(elem_node("body", &[]), body);
+
+        let p = body.borrow().first_child().unwrap();
+        assert_eq!(elem_node("p", &[]), p);
+
+        let a_attr = Attribute::nv("foo", "bar");
+        let a = p.borrow().first_child().unwrap();
+        assert_eq!(elem_node("a", &[a_attr]), a);
+
+        let text = a.borrow().first_child().unwrap();
+        assert_eq!(text_node("text value"), text);
+
+        let span_attr = Attribute::nv("class", "hoge");
+        let span = a.borrow().next_sibling().unwrap();
+        assert_eq!(elem_node("span", &[span_attr]), span);
+    }
+
     fn doc_node() -> Rc<RefCell<Node>> {
         Rc::new(RefCell::new(Node::new(NodeKind::Document)))
     }
