@@ -1,0 +1,27 @@
+use core::cell::RefCell;
+
+use alloc::{format, rc::Rc, string::String};
+
+use crate::renderer::dom::node::Node;
+
+pub fn convert_dom_to_string(root: &Option<Rc<RefCell<Node>>>) -> String {
+    let mut result = String::from("\n");
+    convert_dom_to_string_internal(root, 0, &mut result);
+    result
+}
+
+fn convert_dom_to_string_internal(
+    node: &Option<Rc<RefCell<Node>>>,
+    depth: usize,
+    result: &mut String,
+) {
+    let Some(node) = node else {
+        return;
+    };
+
+    result.push_str(&"  ".repeat(depth));
+    result.push_str(&format!("{:?}", node.borrow().kind()));
+    result.push('\n');
+    convert_dom_to_string_internal(&node.borrow().first_child(), depth + 1, result);
+    convert_dom_to_string_internal(&node.borrow().next_sibling(), depth, result);
+}
