@@ -269,7 +269,76 @@ mod tests {
 
         let expected = [rule];
         assert_eq!(cssom.rules.len(), expected.len());
+        for (r, e) in cssom.rules.iter().zip(expected.iter()) {
+            assert_eq!(r, e);
+        }
+    }
 
+    #[test]
+    fn test_id_selector() {
+        let style = "#id { color: red; }".to_string();
+        let t = CssTokenizer::new(style);
+        let cssom = CssParser::new(t).parse_stylesheet();
+
+        let mut rule = QualifiedRule::default();
+        rule.set_selector(Selector::IdSelector("id".to_string()));
+        let mut declaration = Declaration::default();
+        declaration.set_property("color".to_string());
+        declaration.set_value(ComponentValue::Ident("red".to_string()));
+        rule.set_declarations(vec![declaration]);
+
+        let expected = [rule];
+        assert_eq!(cssom.rules.len(), expected.len());
+        for (r, e) in cssom.rules.iter().zip(expected.iter()) {
+            assert_eq!(r, e);
+        }
+    }
+
+    #[test]
+    fn test_class_selector() {
+        let style = ".class { color: red; }".to_string();
+        let t = CssTokenizer::new(style);
+        let cssom = CssParser::new(t).parse_stylesheet();
+
+        let mut rule = QualifiedRule::default();
+        rule.set_selector(Selector::ClassSelector("class".to_string()));
+        let mut declaration = Declaration::default();
+        declaration.set_property("color".to_string());
+        declaration.set_value(ComponentValue::Ident("red".to_string()));
+        rule.set_declarations(vec![declaration]);
+
+        let expected = [rule];
+        assert_eq!(cssom.rules.len(), expected.len());
+        for (r, e) in cssom.rules.iter().zip(expected.iter()) {
+            assert_eq!(r, e);
+        }
+    }
+
+    #[test]
+    fn test_multiple_rule() {
+        let style = r#"p { content: "Hey"; } h1 { font-size: 40; color: blue; }"#.to_string();
+        let t = CssTokenizer::new(style);
+        let cssom = CssParser::new(t).parse_stylesheet();
+
+        let mut rule1 = QualifiedRule::default();
+        rule1.set_selector(Selector::TypeSelector("p".to_string()));
+        let mut declaration = Declaration::default();
+        declaration.set_property("content".to_string());
+        declaration.set_value(ComponentValue::StringToken("Hey".to_string()));
+        rule1.set_declarations(vec![declaration]);
+
+        let mut rule2 = QualifiedRule::default();
+        rule2.set_selector(Selector::TypeSelector("h1".to_string()));
+        let mut declaration2 = Declaration::default();
+        declaration2.set_property("font-size".to_string());
+        declaration2.set_value(ComponentValue::Number(40.0));
+        let mut declaration3 = Declaration::default();
+        declaration3.set_property("color".to_string());
+        declaration3.set_value(ComponentValue::Ident("blue".to_string()));
+        rule2.set_declarations(vec![declaration2, declaration3]);
+
+        let expected = [rule1, rule2];
+        assert_eq!(cssom.rules.len(), expected.len());
         for (r, e) in cssom.rules.iter().zip(expected.iter()) {
             assert_eq!(r, e);
         }
