@@ -17,8 +17,8 @@ impl CssParser {
         Self { t: t.peekable() }
     }
 
-    pub fn parse_stylesheet(&mut self) -> StyleScheet {
-        let mut sheet = StyleScheet::default();
+    pub fn parse_stylesheet(&mut self) -> StyleSheet {
+        let mut sheet = StyleSheet::default();
         let rules = self.consume_list_of_rules();
         sheet.set_rules(rules);
         sheet
@@ -169,11 +169,11 @@ impl CssParser {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct StyleScheet {
+pub struct StyleSheet {
     pub rules: Vec<QualifiedRule>,
 }
 
-impl StyleScheet {
+impl StyleSheet {
     pub fn set_rules(&mut self, rules: Vec<QualifiedRule>) {
         self.rules = rules;
     }
