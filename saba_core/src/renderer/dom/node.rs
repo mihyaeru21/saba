@@ -4,7 +4,11 @@ use alloc::{
     string::String,
     vec::Vec,
 };
-use core::{cell::RefCell, str::FromStr};
+use core::{
+    cell::RefCell,
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 use crate::renderer::html::attribute::Attribute;
 
@@ -161,6 +165,13 @@ impl Element {
     pub fn kind(&self) -> ElementKind {
         self.kind
     }
+
+    pub fn is_block_element(&self) -> bool {
+        match self.kind {
+            ElementKind::Body | ElementKind::H1 | ElementKind::H2 | ElementKind::P => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,5 +205,23 @@ impl FromStr for ElementKind {
             "span" => Ok(ElementKind::Span),
             _ => Err(format!("unimplemented element name {:?}", s)),
         }
+    }
+}
+
+impl Display for ElementKind {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        let s = match self {
+            Self::Html => "html",
+            Self::Head => "head",
+            Self::Style => "style",
+            Self::Script => "script",
+            Self::Body => "body",
+            Self::P => "p",
+            Self::H1 => "h1",
+            Self::H2 => "h2",
+            Self::A => "a",
+            Self::Span => "span",
+        };
+        write!(f, "{s}")
     }
 }
