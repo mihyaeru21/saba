@@ -34,3 +34,36 @@ impl LayoutView {
         self.root.clone()
     }
 }
+
+fn build_layout_tree(
+    node: &Option<Rc<RefCell<Node>>>,
+    parent_obj: &Option<Rc<RefCell<LayoutObject>>>,
+    cssom: &StyleSheet,
+) -> Option<Rc<RefCell<LayoutObject>>> {
+    let mut target_node = node.clone();
+    let mut layout_object = create_layout_object(node, parent_obj, cssom);
+
+    while layout_object.is_none() {
+        let Some(n) = target_node else {
+            return layout_object;
+        };
+        target_node = n.borrow().next_sibling().clone();
+        layout_object = create_layout_object(&target_node, parent_obj, cssom);
+    }
+
+    if let Some(n) = target_node {
+        let original_first_child = n.borrow().first_child();
+        let original_next_sibling = n.borrow().next_sibling();
+        let mut first_child = build_layout_tree(&original_first_child, &layout_object, cssom);
+        let mut next_sibling = build_layout_tree(&original_next_sibling, &layout_object, cssom);
+    }
+
+    layout_object
+}
+
+fn create_layout_object(
+    node: &Option<Rc<RefCell<Node>>>,
+    parent_obj: &Option<Rc<RefCell<LayoutObject>>>,
+    cssom: &StyleSheet,
+) -> Option<Rc<RefCell<LayoutObject>>> {
+}
