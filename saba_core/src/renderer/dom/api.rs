@@ -26,3 +26,16 @@ pub fn get_target_element_node(
     }
     result1
 }
+
+pub fn get_style_content(root: Rc<RefCell<Node>>) -> String {
+    let Some(style_node) = get_target_element_node(Some(root), ElementKind::Style) else {
+        return "".to_string();
+    };
+    let Some(text_node) = style_node.borrow().first_child() else {
+        return "".to_string();
+    };
+    let Some(content) = &text_node.borrow().kind() else {
+        return "".to_string();
+    };
+    content
+}

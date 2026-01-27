@@ -1,10 +1,18 @@
 use core::cell::RefCell;
 
-use alloc::rc::{Rc, Weak};
+use alloc::{
+    rc::{Rc, Weak},
+    string::ToString,
+    vec::Vec,
+};
 
-use crate::renderer::{
-    dom::node::{Node, NodeKind},
-    layout::computed_style::ComputedStyle,
+use crate::{
+    constants::{CHAR_HEIGHT_WITH_PADDING, CHAR_WIDTH, CONTENT_AREA_WIDTH},
+    renderer::{
+        css::cssom::{ComponentValue, Declaration, Selector},
+        dom::node::{Node, NodeKind},
+        layout::computed_style::{Color, ComputedStyle, DisplayType, FontSize},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -32,7 +40,7 @@ impl LayoutObject {
             first_child: None,
             next_sibling: None,
             parent,
-            style: ComputedStyle::new(),
+            style: ComputedStyle::default(),
             point: LayoutPoint::new(0, 0),
             size: LayoutSize::new(0, 0),
         }
@@ -76,6 +84,209 @@ impl LayoutObject {
 
     pub fn size(&self) -> LayoutSize {
         self.size
+    }
+
+    pub fn is_node_selected(&self, selector: &Selector) -> bool {
+        let NodeKind::Element(element) = &self.node_kind() else {
+            return false;
+        };
+
+        match selector {
+            Selector::TypeSelector(type_name) => element.kind().to_string() == *type_name,
+            Selector::ClassSelector(class_name) => element
+                .attributes()
+                .iter()
+                .any(|a| a.name() == "class" && a.value() == *class_name),
+            Selector::IdSelector(id_name) => element
+                .attributes()
+                .iter()
+                .any(|a| a.name() == "id" && a.value() == *id_name),
+            Selector::UnknownSelector => false,
+        }
+    }
+
+    pub fn cascading_style(&mut self, declarations: Vec<Declaration>) {
+        for declaration in declarations {
+            match declaration.property.as_ref() {
+                "background-color" => {
+                    if let ComponentValue::Ident(value) = &declaration.value {
+                        let color = match Color::from_name(&value) {
+                            Ok(color) => color,
+                            Err(_) => Color::white(),
+                        };
+                        self.style.set_background_color(color);
+                        continue;
+                    }
+
+                    if let ComponentValue::HashToken(color_code) = &declaration.value {
+                        let color = match Color::from_code(&color_code) {
+                            Ok(color) => color,
+                            Err(_) => Color::white(),
+                        };
+                        self.style.set_background_color(color);
+                        continue;
+                    }
+                }
+                "color" => {
+                    if let ComponentValue::Ident(value) = &declaration.value {
+                        let color = match Color::from_name(&value) {
+                            Ok(color) => color,
+                            Err(_) => Color::black(),
+                        };
+                        self.style.set_color(color);
+                    }
+
+                    if let ComponentValue::HashToken(color_code) = &declaration.value {
+                        let color = match Color::from_code(&color_code) {
+                            Ok(color) => color,
+                            Err(_) => Color::black(),
+                        };
+                        self.style.set_color(color);
+                    }
+                }
+                "display" => {
+                    if let ComponentValue::Ident(value) = declaration.value {
+                        let display_type = match DisplayType::from_str(&value) {
+                            Ok(display_type) => display_type,
+                            Err(_) => DisplayType::DisplayNone,
+                        };
+                        self.style.set_display(display_type);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    pub fn defauting_style(
+        &mut self,
+        node: &Rc<RefCell<Node>>,
+        parent_style: Option<ComputedStyle>,
+    ) {
+        self.style.defaulting(node, parent_style);
+    }
+
+    pub fn update_kind(&mut self) {
+        self.kind = match self.node_kind() {
+            NodeKind::Document => {
+                panic!("should not create Blocka layout object for a Document node")
+            }
+            NodeKind::Element(_) => match self.style.display() {
+                DisplayType::Block => LayoutObjectKind::Block,
+                DisplayType::Inline => LayoutObjectKind::Inline,
+                DisplayType::DisplayNone => {
+                    panic!("hould not create a layout object for display:none")
+                }
+            },
+            NodeKind::Text(_) => LayoutObjectKind::Text,
+        };
+    }
+
+    pub fn compute_size(&mut self, parent_size: LayoutSize) {
+        let mut size = LayoutSize::new(0, 0);
+
+        match self.kind() {
+            LayoutObjectKind::Block => {
+                size.set_width(parent_size.width());
+
+                // すべての子ノードの高さを足し合わせた結果が高さになる。
+                // ただし、インライン要素が横に並んでいる場合は注意が必要
+                let mut height = 0;
+                let mut child = self.first_child();
+                let mut prev_child_kind = LayoutObjectKind::Block;
+                while let Some(c) = child {
+                    if prev_child_kind == LayoutObjectKind::Block
+                        || c.borrow().kind() == LayoutObjectKind::Block
+                    {
+                        height += c.borrow().size.height();
+                    }
+
+                    prev_child_kind = c.borrow().kind();
+                    child = c.borrow().next_sibling();
+                }
+                size.set_height(height);
+            }
+            LayoutObjectKind::Inline => {
+                // すべての子ノードの高さと横幅を足し合わせた結果が現在のノードの高さと横幅とになる
+                let mut width = 0;
+                let mut height = 0;
+                let mut child = self.first_child();
+                while let Some(c) = child {
+                    let c = c.borrow();
+                    width += c.size.width();
+                    height += c.size.height();
+                    child = c.next_sibling();
+                }
+                size.set_width(width);
+                size.set_height(height);
+            }
+            LayoutObjectKind::Text => {
+                if let NodeKind::Text(t) = self.node_kind() {
+                    let ratio = match self.style.font_size() {
+                        FontSize::Medium => 1,
+                        FontSize::XLarge => 2,
+                        FontSize::XXLarge => 3,
+                    };
+                    let width = CHAR_WIDTH * ratio * t.len() as i64;
+                    if width > CONTENT_AREA_WIDTH {
+                        size.set_width(CONTENT_AREA_WIDTH);
+                        let line_num = if width.wrapping_rem(CONTENT_AREA_WIDTH) == 0 {
+                            width.wrapping_div(CONTENT_AREA_WIDTH)
+                        } else {
+                            width.wrapping_div(CONTENT_AREA_WIDTH) + 1
+                        };
+                        size.set_height(CHAR_HEIGHT_WITH_PADDING * ratio * line_num);
+                    } else {
+                        size.set_width(width);
+                        size.set_height(CHAR_HEIGHT_WITH_PADDING * ratio);
+                    }
+                }
+            }
+        }
+
+        self.size = size;
+    }
+
+    pub fn compute_position(
+        &mut self,
+        parent_point: LayoutPoint,
+        prev_sibling_kind: LayoutObjectKind,
+        prev_sibling_point: Option<LayoutPoint>,
+        prev_sibling_size: Option<LayoutSize>,
+    ) {
+        let mut point = LayoutPoint::new(0, 0);
+
+        match (self.kind(), prev_sibling_kind) {
+            (LayoutObjectKind::Block, _) | (_, LayoutObjectKind::Block) => {
+                if let (Some(size), Some(pos)) = (prev_sibling_size, prev_sibling_point) {
+                    point.set_y(pos.y() + size.height());
+                } else {
+                    point.set_y(parent_point.y());
+                }
+                point.set_x(parent_point.x());
+            }
+            (LayoutObjectKind::Inline, LayoutObjectKind::Inline) => {
+                if let (Some(size), Some(pos)) = (prev_sibling_size, prev_sibling_point) {
+                    point.set_x(pos.x() + size.width());
+                    point.set_y(pos.y());
+                } else {
+                    point.set_x(parent_point.x());
+                    point.set_y(parent_point.y());
+                }
+            }
+            _ => {
+                point.set_x(parent_point.x());
+                point.set_y(parent_point.y());
+            }
+        }
+
+        self.point = point;
+    }
+}
+
+impl PartialEq for LayoutObject {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
     }
 }
 
