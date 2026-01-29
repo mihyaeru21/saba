@@ -2,15 +2,18 @@ use core::cell::RefCell;
 
 use alloc::rc::Rc;
 
-use crate::renderer::{
-    css::cssom::StyleSheet,
-    dom::{
-        api::get_target_element_node,
-        node::{ElementKind, Node},
-    },
-    layout::{
-        computed_style::DisplayType,
-        layout_object::{LayoutObject, LayoutObjectKind, LayoutPoint, LayoutSize},
+use crate::{
+    constants::CONTENT_AREA_WIDTH,
+    renderer::{
+        css::cssom::StyleSheet,
+        dom::{
+            api::get_target_element_node,
+            node::{ElementKind, Node},
+        },
+        layout::{
+            computed_style::DisplayType,
+            layout_object::{LayoutObject, LayoutObjectKind, LayoutPoint, LayoutSize},
+        },
     },
 };
 
@@ -191,7 +194,7 @@ fn create_layout_object(
         }
     }
 
-    let parent_style = parent_obj.map(|p| p.borrow().style());
+    let parent_style = parent_obj.as_ref().map(|parent| parent.borrow().style());
     layout_object
         .borrow_mut()
         .defaulting_style(node, parent_style);
@@ -206,10 +209,17 @@ fn create_layout_object(
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::String;
+    use alloc::{
+        string::{String, ToString},
+        vec::Vec,
+    };
 
     use crate::renderer::{
         css::{cssom::CssParser, token::CssTokenizer},
+        dom::{
+            api::get_style_content,
+            node::{Element, NodeKind},
+        },
         html::{parser::HtmlParser, token::HtmlTokenizer},
     };
 
@@ -223,5 +233,86 @@ mod tests {
         let css_tokenizer = CssTokenizer::new(css);
         let cssom = CssParser::new(css_tokenizer).parse_stylesheet();
         LayoutView::new(dom, &cssom)
+    }
+
+    #[test]
+    fn test_empty() {
+        let layout_view = create_layout_view("".to_string());
+        assert_eq!(None, layout_view.root());
+    }
+
+    #[test]
+    fn test_body() {
+        let html = "<html><head></head><body></body></html>".to_string();
+        let layout_view = create_layout_view(html);
+
+        let root = layout_view.root().expect("root should exist");
+        assert_eq!(LayoutObjectKind::Block, root.borrow().kind());
+        assert_eq!(
+            NodeKind::Element(Element::new("body", Vec::new())),
+            root.borrow().node_kind()
+        );
+    }
+
+    #[test]
+    fn test_text() {
+        let html = "<html><head></head><body>text</body></html>".to_string();
+        let layout_view = create_layout_view(html);
+
+        let root = layout_view.root().expect("root should exist");
+        assert_eq!(LayoutObjectKind::Block, root.borrow().kind());
+        assert_eq!(
+            NodeKind::Element(Element::new("body", Vec::new())),
+            root.borrow().node_kind()
+        );
+
+        let text = root.borrow().first_child().expect("text node should exist");
+        assert_eq!(LayoutObjectKind::Text, text.borrow().kind());
+    }
+
+    #[test]
+    fn test_display_none() {
+        let html = "<html><head><style>body{display:none;}</style></head><body>text</body></html>"
+            .to_string();
+        let layout_view = create_layout_view(html);
+
+        assert_eq!(None, layout_view.root());
+    }
+
+    #[test]
+    fn test_hidden_class() {
+        let html = r#"
+            <html>
+            <head>
+              <style>
+                .hidden {
+                  display: none;
+                }
+              </style>
+            </head>
+            <body>
+              <a class="hidden">link</a>
+              <p>text</p>
+              <p class="hidden"><a>link2</a></p>
+            </body>
+            </html>
+        "#
+        .to_string();
+        let layout_view = create_layout_view(html);
+
+        let root = layout_view.root().expect("root should exist");
+        assert_eq!(LayoutObjectKind::Block, root.borrow().kind());
+        assert_eq!(
+            NodeKind::Element(Element::new("body", Vec::new())),
+            root.borrow().node_kind()
+        );
+
+
+        let p = root.borrow().first_child().expect("p node should exist");
+        assert_eq!(LayoutObjectKind::Block, p.borrow().kind());
+        assert_eq!(
+            NodeKind::Element(Element::new("p", Vec::new())),
+            p.borrow().node_kind()
+        );
     }
 }

@@ -158,7 +158,7 @@ impl LayoutObject {
         }
     }
 
-    pub fn defauting_style(
+    pub fn defaulting_style(
         &mut self,
         node: &Rc<RefCell<Node>>,
         parent_style: Option<ComputedStyle>,

@@ -1,6 +1,10 @@
 use core::cell::RefCell;
 
-use alloc::{rc::Rc, string::ToString, vec::Vec};
+use alloc::{
+    rc::Rc,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use crate::renderer::dom::node::{Element, ElementKind, Node, NodeKind};
 
@@ -34,8 +38,8 @@ pub fn get_style_content(root: Rc<RefCell<Node>>) -> String {
     let Some(text_node) = style_node.borrow().first_child() else {
         return "".to_string();
     };
-    let Some(content) = &text_node.borrow().kind() else {
+    let NodeKind::Text(content) = &text_node.borrow().kind() else {
         return "".to_string();
     };
-    content
+    content.clone()
 }
