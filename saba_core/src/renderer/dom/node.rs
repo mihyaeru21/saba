@@ -117,10 +117,13 @@ impl PartialEq for NodeKind {
         match &self {
             NodeKind::Document => matches!(other, NodeKind::Document),
             NodeKind::Element(e1) => match &other {
-                NodeKind::Element(e2) => e1.kind == e2.kind,
+                NodeKind::Element(e2) => e1.kind == e2.kind && e1.attributes == e2.attributes,
                 _ => false,
             },
-            NodeKind::Text(_) => matches!(other, NodeKind::Text(_)),
+            NodeKind::Text(t1) => match &other {
+                NodeKind::Text(t2) => t1 == t2,
+                _ => false,
+            },
         }
     }
 }
@@ -167,10 +170,10 @@ impl Element {
     }
 
     pub fn is_block_element(&self) -> bool {
-        match self.kind {
-            ElementKind::Body | ElementKind::H1 | ElementKind::H2 | ElementKind::P => true,
-            _ => false,
-        }
+        matches!(
+            self.kind,
+            ElementKind::Body | ElementKind::H1 | ElementKind::H2 | ElementKind::P
+        )
     }
 
     pub fn attributes(&self) -> Vec<Attribute> {

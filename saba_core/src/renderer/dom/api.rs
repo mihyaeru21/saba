@@ -12,7 +12,7 @@ pub fn get_target_element_node(
     node: Option<Rc<RefCell<Node>>>,
     element_kind: ElementKind,
 ) -> Option<Rc<RefCell<Node>>> {
-    let Some(node) = node else { return None };
+    let node = node?;
 
     if node.borrow().kind()
         == NodeKind::Element(Element::new(&element_kind.to_string(), Vec::new()))

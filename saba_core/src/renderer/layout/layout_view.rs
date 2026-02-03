@@ -130,9 +130,9 @@ fn build_layout_tree(
         let mut next_sibling = build_layout_tree(&original_next_sibling, &None, cssom);
 
         if first_child.is_none()
-            && let Some(ofc) = original_first_child
+            && let Some(original_first_child) = original_first_child
         {
-            let mut original_dom_node = ofc.borrow().next_sibling();
+            let mut original_dom_node = original_first_child.borrow().next_sibling();
 
             loop {
                 first_child = build_layout_tree(&original_dom_node, &layout_object, cssom);
@@ -149,9 +149,9 @@ fn build_layout_tree(
         }
 
         if next_sibling.is_none()
-            && let Some(ons) = original_next_sibling
+            && let Some(original_next_sibling) = original_next_sibling
         {
-            let mut original_dom_node = ons.borrow().next_sibling();
+            let mut original_dom_node = original_next_sibling.borrow().next_sibling();
 
             loop {
                 next_sibling = build_layout_tree(&original_dom_node, &None, cssom);
@@ -182,7 +182,7 @@ fn create_layout_object(
     parent_obj: &Option<Rc<RefCell<LayoutObject>>>,
     cssom: &StyleSheet,
 ) -> Option<Rc<RefCell<LayoutObject>>> {
-    let Some(node) = node else { return None };
+    let node = node.as_ref()?;
 
     let layout_object = Rc::new(RefCell::new(LayoutObject::new(node.clone(), parent_obj)));
 
@@ -268,6 +268,10 @@ mod tests {
 
         let text = root.borrow().first_child().expect("text node should exist");
         assert_eq!(LayoutObjectKind::Text, text.borrow().kind());
+        assert_eq!(
+            NodeKind::Text("text".to_string()),
+            text.borrow().node_kind()
+        );
     }
 
     #[test]
@@ -292,7 +296,7 @@ mod tests {
             </head>
             <body>
               <a class="hidden">link</a>
-              <p>text</p>
+              <p>hoge</p>
               <p class="hidden"><a>link2</a></p>
             </body>
             </html>
@@ -300,19 +304,27 @@ mod tests {
         .to_string();
         let layout_view = create_layout_view(html);
 
-        let root = layout_view.root().expect("root should exist");
-        assert_eq!(LayoutObjectKind::Block, root.borrow().kind());
+        let body = layout_view.root().expect("root should exist");
+        assert_eq!(LayoutObjectKind::Block, body.borrow().kind());
         assert_eq!(
             NodeKind::Element(Element::new("body", Vec::new())),
-            root.borrow().node_kind()
+            body.borrow().node_kind()
         );
+        assert!(body.borrow().next_sibling().is_none());
 
-
-        let p = root.borrow().first_child().expect("p node should exist");
-        assert_eq!(LayoutObjectKind::Block, p.borrow().kind());
+        let p = body.borrow().first_child().expect("p node should exist");
         assert_eq!(
             NodeKind::Element(Element::new("p", Vec::new())),
             p.borrow().node_kind()
         );
+        assert_eq!(LayoutObjectKind::Block, p.borrow().kind());
+        assert!(p.borrow().next_sibling().is_none());
+
+        let text = p.borrow().first_child().expect("text node should exist");
+        assert_eq!(
+            NodeKind::Text("hoge".to_string()),
+            text.borrow().node_kind()
+        );
+        assert_eq!(LayoutObjectKind::Text, text.borrow().kind());
     }
 }
