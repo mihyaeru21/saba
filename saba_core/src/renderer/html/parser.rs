@@ -333,7 +333,7 @@ impl HtmlParser {
 
         if let Some(mut last_sibling) = current.borrow().first_child() {
             loop {
-                let Some(next_sibling) = node.borrow().next_sibling() else {
+                let Some(next_sibling) = last_sibling.borrow().next_sibling() else {
                     break;
                 };
                 last_sibling = next_sibling;

@@ -127,7 +127,7 @@ fn build_layout_tree(
         let original_first_child = n.borrow().first_child();
         let original_next_sibling = n.borrow().next_sibling();
         let mut first_child = build_layout_tree(&original_first_child, &layout_object, cssom);
-        let mut next_sibling = build_layout_tree(&original_next_sibling, &layout_object, cssom);
+        let mut next_sibling = build_layout_tree(&original_next_sibling, &None, cssom);
 
         if first_child.is_none()
             && let Some(ofc) = original_first_child
