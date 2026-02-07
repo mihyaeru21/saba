@@ -1,9 +1,10 @@
 use core::cell::RefCell;
 
-use alloc::rc::Rc;
+use alloc::{rc::Rc, vec::Vec};
 
 use crate::{
     constants::CONTENT_AREA_WIDTH,
+    display_item::DisplayItem,
     renderer::{
         css::cssom::StyleSheet,
         dom::{
@@ -104,6 +105,26 @@ impl LayoutView {
             Some(node.borrow().point()),
             Some(node.borrow().size()),
         );
+    }
+
+    fn paint_node(node: &Option<Rc<RefCell<LayoutObject>>>, display_items: &mut Vec<DisplayItem>) {
+        let Some(node) = node else { return };
+
+        display_items.extend(node.borrow_mut().paint());
+
+        let first_child = node.borrow().first_child();
+        Self::paint_node(&first_child, display_items);
+
+        let next_sibling = node.borrow().next_sibling();
+        Self::paint_node(&next_sibling, display_items);
+    }
+
+    pub fn paint(&self) -> Vec<DisplayItem> {
+        let mut display_items = Vec::new();
+
+        Self::paint_node(&self.root, &mut display_items);
+
+        display_items
     }
 }
 

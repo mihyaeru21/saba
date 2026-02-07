@@ -1,13 +1,17 @@
 use core::cell::RefCell;
 
+use alloc::string::String;
+use alloc::vec;
 use alloc::{
     rc::{Rc, Weak},
     string::ToString,
     vec::Vec,
 };
 
+use crate::constants::{WINDOW_PADDING, WINDOW_WIDTH};
 use crate::{
     constants::{CHAR_HEIGHT_WITH_PADDING, CHAR_WIDTH, CONTENT_AREA_WIDTH},
+    display_item::DisplayItem,
     renderer::{
         css::cssom::{ComponentValue, Declaration, Selector},
         dom::node::{Node, NodeKind},
@@ -110,7 +114,7 @@ impl LayoutObject {
             match declaration.property.as_ref() {
                 "background-color" => {
                     if let ComponentValue::Ident(value) = &declaration.value {
-                        let color = match Color::from_name(&value) {
+                        let color = match Color::from_name(value) {
                             Ok(color) => color,
                             Err(_) => Color::white(),
                         };
@@ -119,7 +123,7 @@ impl LayoutObject {
                     }
 
                     if let ComponentValue::HashToken(color_code) = &declaration.value {
-                        let color = match Color::from_code(&color_code) {
+                        let color = match Color::from_code(color_code) {
                             Ok(color) => color,
                             Err(_) => Color::white(),
                         };
@@ -129,7 +133,7 @@ impl LayoutObject {
                 }
                 "color" => {
                     if let ComponentValue::Ident(value) = &declaration.value {
-                        let color = match Color::from_name(&value) {
+                        let color = match Color::from_name(value) {
                             Ok(color) => color,
                             Err(_) => Color::black(),
                         };
@@ -137,7 +141,7 @@ impl LayoutObject {
                     }
 
                     if let ComponentValue::HashToken(color_code) = &declaration.value {
-                        let color = match Color::from_code(&color_code) {
+                        let color = match Color::from_code(color_code) {
                             Ok(color) => color,
                             Err(_) => Color::black(),
                         };
@@ -282,6 +286,61 @@ impl LayoutObject {
 
         self.point = point;
     }
+
+    pub fn paint(&mut self) -> Vec<DisplayItem> {
+        if self.style.display() == DisplayType::DisplayNone {
+            return Vec::new();
+        }
+
+        match self.kind {
+            LayoutObjectKind::Block => {
+                if let NodeKind::Element(_) = self.node_kind() {
+                    return vec![DisplayItem::Rect {
+                        style: self.style(),
+                        layout_point: self.point(),
+                        layout_size: self.size(),
+                    }];
+                }
+            }
+            LayoutObjectKind::Inline => {
+                // 本書のブラウザでは、描画するインライン要素はない。
+                // <img> タグなどをサポートした場合はこのアームの中で処理をする
+            }
+            LayoutObjectKind::Text => {
+                if let NodeKind::Text(t) = self.node_kind() {
+                    let mut v = Vec::new();
+
+                    let ratio = match self.style.font_size() {
+                        FontSize::Medium => 1,
+                        FontSize::XLarge => 2,
+                        FontSize::XXLarge => 3,
+                    };
+                    let plain_text = t
+                        .replace("\n", " ")
+                        .split(' ')
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let lines = split_text(plain_text, CHAR_WIDTH * ratio);
+                    for (i, line) in lines.into_iter().enumerate() {
+                        let item = DisplayItem::Text {
+                            text: line,
+                            style: self.style(),
+                            layout_point: LayoutPoint::new(
+                                self.point().x,
+                                self.point.y + CHAR_HEIGHT_WITH_PADDING * i as i64,
+                            ),
+                        };
+                        v.push(item);
+                    }
+
+                    return v;
+                }
+            }
+        }
+
+        Vec::new()
+    }
 }
 
 impl PartialEq for LayoutObject {
@@ -351,4 +410,30 @@ impl LayoutSize {
     pub fn set_height(&mut self, height: i64) {
         self.height = height;
     }
+}
+
+fn find_index_for_line_break(line: &str, max_index: usize) -> usize {
+    for i in (0..max_index).rev() {
+        if line.chars().collect::<Vec<char>>()[i] == ' ' {
+            return i;
+        }
+    }
+    max_index
+}
+
+fn split_text(line: String, char_width: i64) -> Vec<String> {
+    let mut result: Vec<String> = Vec::new();
+    let width = WINDOW_WIDTH + WINDOW_PADDING;
+    if line.len() as i64 * char_width > width {
+        let s = line.split_at(find_index_for_line_break(
+            &line,
+            (width / char_width) as usize,
+        ));
+        result.push(s.0.to_string());
+        result.extend(split_text(s.0.trim().to_string(), char_width));
+    } else {
+        result.push(line);
+    }
+
+    result
 }
