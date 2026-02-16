@@ -30,11 +30,7 @@ fn main() -> u64 {
 
     let response = HttpResponse::new(TEST_HTTP_RESPONSE.to_string()).unwrap();
     let page = browser.borrow().current_page();
-    let dom_string = page.borrow_mut().recieve_response(response);
-
-    for log in dom_string.lines() {
-        println!("{}", log);
-    }
+    page.borrow_mut().recieve_response(response);
 
     0
 }
