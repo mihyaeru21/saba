@@ -5,16 +5,21 @@ extern crate alloc;
 
 use core::cell::RefCell;
 
-use alloc::rc::Rc;
-use noli::prelude::*;
-use saba_core::browser::Browser;
+use alloc::{
+    format,
+    rc::Rc,
+    string::{String, ToString},
+};
+use net_wasabi::http::HttpClient;
+use noli::{entry_point, println};
+use saba_core::{browser::Browser, error::Error, http::HttpResponse, url::Url};
 use ui_wasabi::app::WasabiUI;
 
 fn main() -> u64 {
     let browser = Browser::new();
     let ui = Rc::new(RefCell::new(WasabiUI::new(browser)));
 
-    if let Err(e) = ui.borrow_mut().start() {
+    if let Err(e) = ui.borrow_mut().start(handle_url) {
         println!("browser failes to start: {e:?}");
         return 1;
     }
@@ -23,3 +28,32 @@ fn main() -> u64 {
 }
 
 entry_point!(main);
+
+fn handle_url(url: String) -> Result<HttpResponse, Error> {
+    http_get(&url, false)
+}
+
+fn http_get(url: &str, redirecting: bool) -> Result<HttpResponse, Error> {
+    let parsed_url = Url::new(url.to_string())
+        .parse()
+        .map_err(|e| Error::UnexpectedInput(format!("input url is not supported: {e:?}")))?;
+    let port = parsed_url
+        .port()
+        .parse()
+        .unwrap_or_else(|_| panic!("port number should be u16 but got {}", parsed_url.port()));
+
+    let client = HttpClient::default();
+    let response = client
+        .get(parsed_url.host(), port, parsed_url.path())
+        .map_err(|e| Error::Network(format!("failed to get http response: {e:?}")))?;
+
+    // 元の実装ではリダイレクトは1段だけ実装されてるのでそれを再現
+    if !redirecting && response.status_code() == 302 {
+        let Ok(location) = response.header_value("Location") else {
+            return Ok(response);
+        };
+        return http_get(&location, true);
+    }
+
+    Ok(response)
+}

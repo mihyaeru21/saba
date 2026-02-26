@@ -15,13 +15,17 @@ use noli::{
 use saba_core::{
     browser::Browser,
     constants::{
-        ADDRESSBAR_HEIGHT, BLACK, DARKGREY, GREY, LIGHTGREY, TITLE_BAR_HEIGHT, TOOLBAR_HEIGHT,
-        WHITE, WINDOW_HEIGHT, WINDOW_INIT_X_POS, WINDOW_INIT_Y_POS, WINDOW_WIDTH,
+        ADDRESSBAR_HEIGHT, BLACK, CONTENT_AREA_HRIGHT, CONTENT_AREA_WIDTH, DARKGREY, GREY,
+        LIGHTGREY, TITLE_BAR_HEIGHT, TOOLBAR_HEIGHT, WHITE, WINDOW_HEIGHT, WINDOW_INIT_X_POS,
+        WINDOW_INIT_Y_POS, WINDOW_WIDTH,
     },
     error::Error,
+    http::HttpResponse,
 };
 
 use crate::cursor::Cursor;
+
+type UrlHandler = fn(String) -> Result<HttpResponse, Error>;
 
 pub struct WasabiUI {
     browser: Rc<RefCell<Browser>>,
@@ -50,10 +54,10 @@ impl WasabiUI {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(&mut self, handle_url: UrlHandler) -> Result<(), Error> {
         self.setup()?;
 
-        self.run_app()?;
+        self.run_app(handle_url)?;
 
         Ok(())
     }
@@ -113,10 +117,10 @@ impl WasabiUI {
         Ok(())
     }
 
-    fn run_app(&mut self) -> Result<(), Error> {
+    fn run_app(&mut self, handle_url: UrlHandler) -> Result<(), Error> {
         loop {
             self.handle_mouse_input()?;
-            self.handle_key_input()?;
+            self.handle_key_input(handle_url)?;
         }
     }
 
@@ -170,20 +174,29 @@ impl WasabiUI {
         Ok(())
     }
 
-    fn handle_key_input(&mut self) -> Result<(), Error> {
+    fn handle_key_input(&mut self, handle_url: UrlHandler) -> Result<(), Error> {
         match self.input_mode {
             InputMode::Normal => {
                 let _ = Api::read_key();
             }
             InputMode::Editing => {
                 if let Some(c) = Api::read_key() {
-                    if c == 0x7F as char || c == 0x08 as char {
-                        // Delete キーまたは BackSpace キーが押されたので、最後の文字を削除する
-                        self.input_url.pop();
-                        self.update_address_bar()?;
-                    } else {
-                        self.input_url.push(c);
-                        self.update_address_bar()?;
+                    match c as u8 {
+                        0x0a => {
+                            // Enterキーが押されたので、ナビゲーションを開始する
+                            self.start_navigation(handle_url, self.input_url.clone())?;
+                            self.input_url = String::new();
+                            self.input_mode = InputMode::Normal;
+                        }
+                        0x7f | 0x08 => {
+                            // Delete キーまたは BackSpace キーが押されたので、最後の文字を削除する
+                            self.input_url.pop();
+                            self.update_address_bar()?;
+                        }
+                        _ => {
+                            self.input_url.push(c);
+                            self.update_address_bar()?;
+                        }
                     }
                 }
             }
@@ -227,6 +240,36 @@ impl WasabiUI {
             )
             .expect("failed to create a rect for the address bar"),
         );
+
+        Ok(())
+    }
+
+    fn start_navigation(
+        &mut self,
+        handle_url: UrlHandler,
+        destination: String,
+    ) -> Result<(), Error> {
+        self.clear_content_area()?;
+
+        let response = handle_url(destination)?;
+        let page = self.browser.borrow().current_page();
+        page.borrow_mut().recieve_response(response);
+
+        Ok(())
+    }
+
+    fn clear_content_area(&mut self) -> Result<(), Error> {
+        self.window
+            .fill_rect(
+                WHITE,
+                0,
+                TOOLBAR_HEIGHT + 2,
+                CONTENT_AREA_WIDTH,
+                CONTENT_AREA_HRIGHT - 2,
+            )
+            .map_err(|_| Error::InvalidUI("failed to clear a content area".to_string()))?;
+
+        self.window.flush();
 
         Ok(())
     }
