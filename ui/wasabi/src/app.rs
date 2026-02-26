@@ -1,25 +1,42 @@
 use core::cell::RefCell;
 
-use alloc::{format, rc::Rc, string::ToString};
-use noli::{error::Result as OsResult, window::Window};
+use alloc::{
+    format,
+    rc::Rc,
+    string::{String, ToString},
+};
+use noli::{
+    error::Result as OsResult,
+    prelude::{Api, MouseEvent, SystemApi},
+    println,
+    rect::Rect,
+    window::{StringSize, Window},
+};
 use saba_core::{
     browser::Browser,
     constants::{
-        ADDRESSBAR_HEIGHT, BLACK, DARKGREY, GREY, LIGHTGREY, TOOLBAR_HEIGHT, WHITE, WINDOW_HEIGHT,
-        WINDOW_INIT_X_POS, WINDOW_INIT_Y_POS, WINDOW_WIDTH,
+        ADDRESSBAR_HEIGHT, BLACK, DARKGREY, GREY, LIGHTGREY, TITLE_BAR_HEIGHT, TOOLBAR_HEIGHT,
+        WHITE, WINDOW_HEIGHT, WINDOW_INIT_X_POS, WINDOW_INIT_Y_POS, WINDOW_WIDTH,
     },
     error::Error,
 };
 
+use crate::cursor::Cursor;
+
 pub struct WasabiUI {
     browser: Rc<RefCell<Browser>>,
+    input_url: String,
+    input_mode: InputMode,
     window: Window,
+    cursor: Cursor,
 }
 
 impl WasabiUI {
     pub fn new(browser: Rc<RefCell<Browser>>) -> Self {
         Self {
             browser,
+            input_url: String::new(),
+            input_mode: InputMode::Normal,
             window: Window::new(
                 "saba".to_string(),
                 WHITE,
@@ -29,6 +46,7 @@ impl WasabiUI {
                 WINDOW_HEIGHT,
             )
             .unwrap(),
+            cursor: Cursor::new(),
         }
     }
 
@@ -96,6 +114,126 @@ impl WasabiUI {
     }
 
     fn run_app(&mut self) -> Result<(), Error> {
+        loop {
+            self.handle_mouse_input()?;
+            self.handle_key_input()?;
+        }
+    }
+
+    fn handle_mouse_input(&mut self) -> Result<(), Error> {
+        struct Position {
+            x: i64,
+            y: i64,
+        }
+
+        let Some(MouseEvent { button, position }) = Api::get_mouse_cursor_info() else {
+            return Ok(());
+        };
+
+        self.window.flush_area(self.cursor.rect());
+        self.cursor.set_position(position.x, position.y);
+        self.window.flush_area(self.cursor.rect());
+        self.cursor.flush();
+
+        if !button.l() && !button.c() && !button.r() {
+            return Ok(());
+        }
+
+        let relative_pos = Position {
+            x: position.x - WINDOW_INIT_X_POS,
+            y: position.y - WINDOW_INIT_Y_POS,
+        };
+
+        // ウィンドウ外
+        if relative_pos.x < 0
+            || relative_pos.x > WINDOW_WIDTH
+            || relative_pos.y < 0
+            || relative_pos.y > WINDOW_HEIGHT
+        {
+            println!("button clicked OUTSIDE window: {button:?} {position:?}");
+            return Ok(());
+        }
+
+        // ツールバー
+        if relative_pos.y < TOOLBAR_HEIGHT + TITLE_BAR_HEIGHT && relative_pos.y >= TITLE_BAR_HEIGHT
+        {
+            self.clear_address_bar()?;
+            self.input_url = String::new();
+            self.input_mode = InputMode::Editing;
+            println!("button clicked in toolbar: {button:?} {position:?}");
+            return Ok(());
+        }
+
+        // 入力をやめる
+        self.input_mode = InputMode::Normal;
+
         Ok(())
     }
+
+    fn handle_key_input(&mut self) -> Result<(), Error> {
+        match self.input_mode {
+            InputMode::Normal => {
+                let _ = Api::read_key();
+            }
+            InputMode::Editing => {
+                if let Some(c) = Api::read_key() {
+                    if c == 0x7F as char || c == 0x08 as char {
+                        // Delete キーまたは BackSpace キーが押されたので、最後の文字を削除する
+                        self.input_url.pop();
+                        self.update_address_bar()?;
+                    } else {
+                        self.input_url.push(c);
+                        self.update_address_bar()?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_address_bar(&mut self) -> Result<(), Error> {
+        self.window
+            .fill_rect(WHITE, 72, 4, WINDOW_WIDTH - 76, ADDRESSBAR_HEIGHT - 2)
+            .map_err(|_| Error::InvalidUI("failed to clear an address bar".to_string()))?;
+        self.window
+            .draw_string(BLACK, 74, 6, &self.input_url, StringSize::Medium, false)
+            .map_err(|_| Error::InvalidUI("failed to update an address bar".to_string()))?;
+
+        self.window.flush_area(
+            Rect::new(
+                WINDOW_INIT_X_POS,
+                WINDOW_INIT_Y_POS + TITLE_BAR_HEIGHT,
+                WINDOW_WIDTH,
+                TOOLBAR_HEIGHT,
+            )
+            .expect("failed to create a rect for the address bar"),
+        );
+
+        Ok(())
+    }
+
+    fn clear_address_bar(&mut self) -> Result<(), Error> {
+        self.window
+            .fill_rect(WHITE, 72, 4, WINDOW_WIDTH - 76, ADDRESSBAR_HEIGHT - 2)
+            .map_err(|_| Error::InvalidUI("failed to clear an address bar".to_string()))?;
+
+        self.window.flush_area(
+            Rect::new(
+                WINDOW_INIT_X_POS,
+                WINDOW_INIT_Y_POS,
+                WINDOW_WIDTH,
+                TOOLBAR_HEIGHT,
+            )
+            .expect("failed to create a rect for the address bar"),
+        );
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InputMode {
+    Normal,
+    Editing,
 }
