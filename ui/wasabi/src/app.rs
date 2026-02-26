@@ -25,7 +25,7 @@ use saba_core::{
 
 use crate::cursor::Cursor;
 
-type UrlHandler = fn(String) -> Result<HttpResponse, Error>;
+type UrlHandler = fn(&str) -> Result<HttpResponse, Error>;
 
 pub struct WasabiUI {
     browser: Rc<RefCell<Browser>>,
@@ -184,7 +184,7 @@ impl WasabiUI {
                     match c as u8 {
                         0x0a => {
                             // Enterキーが押されたので、ナビゲーションを開始する
-                            self.start_navigation(handle_url, self.input_url.clone())?;
+                            self.start_navigation(handle_url, &self.input_url.clone())?;
                             self.input_url = String::new();
                             self.input_mode = InputMode::Normal;
                         }
@@ -244,11 +244,7 @@ impl WasabiUI {
         Ok(())
     }
 
-    fn start_navigation(
-        &mut self,
-        handle_url: UrlHandler,
-        destination: String,
-    ) -> Result<(), Error> {
+    fn start_navigation(&mut self, handle_url: UrlHandler, destination: &str) -> Result<(), Error> {
         self.clear_content_area()?;
 
         let response = handle_url(destination)?;

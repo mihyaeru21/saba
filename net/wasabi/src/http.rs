@@ -6,31 +6,32 @@ use alloc::vec::Vec;
 use noli::net::{SocketAddr, TcpStream, lookup_host};
 use saba_core::error::Error;
 use saba_core::http::HttpResponse;
+use saba_core::url::Url;
 
 #[derive(Default)]
 pub struct HttpClient {}
 
 impl HttpClient {
-    pub fn get(&self, host: String, port: u16, path: String) -> Result<HttpResponse, Error> {
-        let ips = lookup_host(&host)
+    pub fn get(&self, url: &Url) -> Result<HttpResponse, Error> {
+        let ips = lookup_host(url.host())
             .map_err(|e| Error::Network(format!("Failed to find IP addresses: {:#?}", e)))?;
 
         if ips.is_empty() {
             return Err(Error::Network("Failed to find IP addresses".to_string()));
         }
 
-        let socket_addr: SocketAddr = (ips[0], port).into();
+        let socket_addr: SocketAddr = (ips[0], url.port()).into();
 
         let mut stream = TcpStream::connect(socket_addr)
             .map_err(|_| Error::Network("Failed to connect to TCP stream".to_string()))?;
 
         let mut request = String::from("GET /");
-        request.push_str(&path);
+        request.push_str(url.path());
         request.push_str(" HTTP/1.1\n");
 
         // add headers
         request.push_str("Host: ");
-        request.push_str(&host);
+        request.push_str(url.host());
         request.push('\n');
         request.push_str("Accept: text/html\n");
         request.push_str("Connection: close\n");

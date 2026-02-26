@@ -5,11 +5,7 @@ extern crate alloc;
 
 use core::cell::RefCell;
 
-use alloc::{
-    format,
-    rc::Rc,
-    string::{String, ToString},
-};
+use alloc::{format, rc::Rc, string::ToString};
 use net_wasabi::http::HttpClient;
 use noli::{entry_point, println};
 use saba_core::{browser::Browser, error::Error, http::HttpResponse, url::Url};
@@ -29,22 +25,18 @@ fn main() -> u64 {
 
 entry_point!(main);
 
-fn handle_url(url: String) -> Result<HttpResponse, Error> {
-    http_get(&url, false)
+fn handle_url(url: &str) -> Result<HttpResponse, Error> {
+    http_get(url, false)
 }
 
 fn http_get(url: &str, redirecting: bool) -> Result<HttpResponse, Error> {
     let parsed_url = Url::new(url.to_string())
         .parse()
         .map_err(|e| Error::UnexpectedInput(format!("input url is not supported: {e:?}")))?;
-    let port = parsed_url
-        .port()
-        .parse()
-        .unwrap_or_else(|_| panic!("port number should be u16 but got {}", parsed_url.port()));
 
     let client = HttpClient::default();
     let response = client
-        .get(parsed_url.host(), port, parsed_url.path())
+        .get(&parsed_url)
         .map_err(|e| Error::Network(format!("failed to get http response: {e:?}")))?;
 
     // 元の実装ではリダイレクトは1段だけ実装されてるのでそれを再現

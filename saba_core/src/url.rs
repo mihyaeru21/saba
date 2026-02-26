@@ -7,7 +7,7 @@ use alloc::{
 pub struct Url {
     url: String,
     host: String,
-    port: String,
+    port: u16,
     path: String,
     searchpart: String,
 }
@@ -17,7 +17,7 @@ impl Url {
         Self {
             url,
             host: "".to_string(),
-            port: "".to_string(),
+            port: 0,
             path: "".to_string(),
             searchpart: "".to_string(),
         }
@@ -36,20 +36,20 @@ impl Url {
         Ok(self.clone())
     }
 
-    pub fn host(&self) -> String {
-        self.host.clone()
+    pub fn host(&self) -> &str {
+        &self.host
     }
 
-    pub fn port(&self) -> String {
-        self.port.clone()
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
-    pub fn path(&self) -> String {
-        self.path.clone()
+    pub fn path(&self) -> &str {
+        &self.path
     }
 
-    pub fn searchpart(&self) -> String {
-        self.searchpart.clone()
+    pub fn searchpart(&self) -> &str {
+        &self.searchpart
     }
 
     fn is_http(&self) -> bool {
@@ -70,18 +70,18 @@ impl Url {
         }
     }
 
-    fn extract_port(&self) -> String {
+    fn extract_port(&self) -> u16 {
         let url_parts: Vec<&str> = self
             .url
             .trim_start_matches("http://")
             .splitn(2, "/")
             .collect();
 
-        if let Some(index) = url_parts[0].find(':') {
-            url_parts[0][index + 1..].to_string()
-        } else {
-            "80".to_string()
-        }
+        let Some(index) = url_parts[0].find(':') else {
+            return 80;
+        };
+
+        url_parts[0][index + 1..].parse().unwrap_or(80)
     }
 
     fn extract_path(&self) -> String {
@@ -129,7 +129,7 @@ mod tests {
         let expected = Ok(Url {
             url: url.clone(),
             host: "example.com".to_string(),
-            port: "80".to_string(),
+            port: 80,
             path: "".to_string(),
             searchpart: "".to_string(),
         });
@@ -142,7 +142,7 @@ mod tests {
         let expected = Ok(Url {
             url: url.clone(),
             host: "example.com".to_string(),
-            port: "8888".to_string(),
+            port: 8888,
             path: "".to_string(),
             searchpart: "".to_string(),
         });
@@ -155,7 +155,7 @@ mod tests {
         let expected = Ok(Url {
             url: url.clone(),
             host: "example.com".to_string(),
-            port: "8888".to_string(),
+            port: 8888,
             path: "index.html".to_string(),
             searchpart: "".to_string(),
         });
@@ -168,7 +168,7 @@ mod tests {
         let expected = Ok(Url {
             url: url.clone(),
             host: "example.com".to_string(),
-            port: "80".to_string(),
+            port: 80,
             path: "index.html".to_string(),
             searchpart: "".to_string(),
         });
