@@ -117,13 +117,10 @@ impl PartialEq for NodeKind {
         match &self {
             NodeKind::Document => matches!(other, NodeKind::Document),
             NodeKind::Element(e1) => match &other {
-                NodeKind::Element(e2) => e1.kind == e2.kind && e1.attributes == e2.attributes,
+                NodeKind::Element(e2) => e1.kind == e2.kind,
                 _ => false,
             },
-            NodeKind::Text(t1) => match &other {
-                NodeKind::Text(t2) => t1 == t2,
-                _ => false,
-            },
+            NodeKind::Text(_) => matches!(other, NodeKind::Text(_)),
         }
     }
 }
