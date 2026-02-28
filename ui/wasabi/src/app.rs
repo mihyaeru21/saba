@@ -17,10 +17,12 @@ use saba_core::{
     constants::{
         ADDRESSBAR_HEIGHT, BLACK, CONTENT_AREA_HRIGHT, CONTENT_AREA_WIDTH, DARKGREY, GREY,
         LIGHTGREY, TITLE_BAR_HEIGHT, TOOLBAR_HEIGHT, WHITE, WINDOW_HEIGHT, WINDOW_INIT_X_POS,
-        WINDOW_INIT_Y_POS, WINDOW_WIDTH,
+        WINDOW_INIT_Y_POS, WINDOW_PADDING, WINDOW_WIDTH,
     },
+    display_item::DisplayItem,
     error::Error,
     http::HttpResponse,
+    renderer::layout::computed_style::{FontSize, TextDecoration},
 };
 
 use crate::cursor::Cursor;
@@ -251,6 +253,8 @@ impl WasabiUI {
         let page = self.browser.borrow().current_page();
         page.borrow_mut().recieve_response(response);
 
+        self.update_ui()?;
+
         Ok(())
     }
 
@@ -268,6 +272,63 @@ impl WasabiUI {
         self.window.flush();
 
         Ok(())
+    }
+
+    fn update_ui(&mut self) -> Result<(), Error> {
+        let display_items = self
+            .browser
+            .borrow()
+            .current_page()
+            .borrow()
+            .display_items();
+
+        for item in display_items {
+            println!("{item:?}"); // あとで消す
+
+            match item {
+                DisplayItem::Text {
+                    text,
+                    style,
+                    layout_point,
+                } => self
+                    .window
+                    .draw_string(
+                        style.color().code_u32(),
+                        layout_point.x() + WINDOW_PADDING,
+                        layout_point.y() + WINDOW_PADDING + TOOLBAR_HEIGHT,
+                        &text,
+                        convert_font_size(style.font_size()),
+                        style.text_decoration() == TextDecoration::Underline,
+                    )
+                    .map_err(|_| Error::InvalidUI("failed to draw a string".to_string()))?,
+                DisplayItem::Rect {
+                    style,
+                    layout_point,
+                    layout_size,
+                } => self
+                    .window
+                    .fill_rect(
+                        style.background_color().code_u32(),
+                        layout_point.x() + WINDOW_PADDING,
+                        layout_point.y() + WINDOW_PADDING + TOOLBAR_HEIGHT,
+                        layout_size.width(),
+                        layout_size.height(),
+                    )
+                    .map_err(|_| Error::InvalidUI("failed to draw a string".to_string()))?,
+            }
+        }
+
+        self.window.flush();
+
+        Ok(())
+    }
+}
+
+fn convert_font_size(size: FontSize) -> StringSize {
+    match size {
+        FontSize::Medium => StringSize::Medium,
+        FontSize::XLarge => StringSize::Large,
+        FontSize::XXLarge => StringSize::XLarge,
     }
 }
 
