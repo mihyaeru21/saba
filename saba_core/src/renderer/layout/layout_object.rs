@@ -430,7 +430,7 @@ fn split_text(line: String, char_width: i64) -> Vec<String> {
             (width / char_width) as usize,
         ));
         result.push(s.0.to_string());
-        result.extend(split_text(s.0.trim().to_string(), char_width));
+        result.extend(split_text(s.1.trim().to_string(), char_width));
     } else {
         result.push(line);
     }
