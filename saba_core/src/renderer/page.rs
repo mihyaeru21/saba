@@ -15,9 +15,12 @@ use crate::{
             cssom::{CssParser, StyleSheet},
             token::CssTokenizer,
         },
-        dom::{api::get_style_content, node::Window},
+        dom::{
+            api::get_style_content,
+            node::{ElementKind, NodeKind, Window},
+        },
         html::{parser::HtmlParser, token::HtmlTokenizer},
-        layout::layout_view::LayoutView,
+        layout::{layout_object::LayoutPoint, layout_view::LayoutView},
     },
 };
 
@@ -90,5 +93,19 @@ impl Page {
 
     pub fn clear_display_items(&mut self) {
         self.display_items = Vec::new();
+    }
+
+    pub fn clicked(&self, position: LayoutPoint) -> Option<String> {
+        let view = self.layout_view.as_ref()?;
+        let node = view.find_node_by_position(position)?;
+        let parent = node.borrow().parent().upgrade()?;
+
+        if let NodeKind::Element(e) = parent.borrow().node_kind()
+            && e.kind() == ElementKind::A
+        {
+            return e.get_attribute("href");
+        }
+
+        None
     }
 }

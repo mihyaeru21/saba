@@ -22,7 +22,10 @@ use saba_core::{
     display_item::DisplayItem,
     error::Error,
     http::HttpResponse,
-    renderer::layout::computed_style::{FontSize, TextDecoration},
+    renderer::layout::{
+        computed_style::{FontSize, TextDecoration},
+        layout_object::LayoutPoint,
+    },
 };
 
 use crate::cursor::Cursor;
@@ -121,17 +124,12 @@ impl WasabiUI {
 
     fn run_app(&mut self, handle_url: UrlHandler) -> Result<(), Error> {
         loop {
-            self.handle_mouse_input()?;
             self.handle_key_input(handle_url)?;
+            self.handle_mouse_input(handle_url)?;
         }
     }
 
-    fn handle_mouse_input(&mut self) -> Result<(), Error> {
-        struct Position {
-            x: i64,
-            y: i64,
-        }
-
+    fn handle_mouse_input(&mut self, handle_url: UrlHandler) -> Result<(), Error> {
         let Some(MouseEvent { button, position }) = Api::get_mouse_cursor_info() else {
             return Ok(());
         };
@@ -145,7 +143,7 @@ impl WasabiUI {
             return Ok(());
         }
 
-        let relative_pos = Position {
+        let relative_pos = LayoutPoint {
             x: position.x - WINDOW_INIT_X_POS,
             y: position.y - WINDOW_INIT_Y_POS,
         };
@@ -172,6 +170,19 @@ impl WasabiUI {
 
         // 入力をやめる
         self.input_mode = InputMode::Normal;
+
+        let position_in_content_area = LayoutPoint {
+            x: relative_pos.x,
+            y: relative_pos.y - TITLE_BAR_HEIGHT - TOOLBAR_HEIGHT,
+        };
+        let page = self.browser.borrow().current_page();
+        let next_destination = page.borrow_mut().clicked(position_in_content_area);
+
+        if let Some(url) = next_destination {
+            self.input_url = url.clone();
+            self.update_address_bar()?;
+            self.start_navigation(handle_url, &url)?;
+        }
 
         Ok(())
     }
@@ -262,7 +273,7 @@ impl WasabiUI {
         self.window
             .fill_rect(
                 WHITE,
-                0,
+                WINDOW_PADDING, // 書籍だと0だけど意味的には padding が必要
                 TOOLBAR_HEIGHT + 2,
                 CONTENT_AREA_WIDTH,
                 CONTENT_AREA_HRIGHT - 2,
@@ -294,25 +305,21 @@ impl WasabiUI {
                     .window
                     .draw_string(
                         style.color().code_u32(),
-                        layout_point.x() + WINDOW_PADDING,
-                        layout_point.y() + WINDOW_PADDING + TOOLBAR_HEIGHT,
+                        layout_point.x + WINDOW_PADDING,
+                        layout_point.y + WINDOW_PADDING + TOOLBAR_HEIGHT,
                         &text,
                         convert_font_size(style.font_size()),
                         style.text_decoration() == TextDecoration::Underline,
                     )
                     .map_err(|_| Error::InvalidUI("failed to draw a string".to_string()))?,
-                DisplayItem::Rect {
-                    style,
-                    layout_point,
-                    layout_size,
-                } => self
+                DisplayItem::Rect { style, layout_rect } => self
                     .window
                     .fill_rect(
                         style.background_color().code_u32(),
-                        layout_point.x() + WINDOW_PADDING,
-                        layout_point.y() + WINDOW_PADDING + TOOLBAR_HEIGHT,
-                        layout_size.width(),
-                        layout_size.height(),
+                        layout_rect.point.x + WINDOW_PADDING,
+                        layout_rect.point.y + WINDOW_PADDING + TOOLBAR_HEIGHT,
+                        layout_rect.size.width,
+                        layout_rect.size.height,
                     )
                     .map_err(|_| Error::InvalidUI("failed to draw a string".to_string()))?,
             }

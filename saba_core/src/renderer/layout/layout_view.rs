@@ -13,7 +13,7 @@ use crate::{
         },
         layout::{
             computed_style::DisplayType,
-            layout_object::{LayoutObject, LayoutObjectKind, LayoutPoint, LayoutSize},
+            layout_object::{LayoutObject, LayoutObjectKind, LayoutPoint, LayoutRect, LayoutSize},
         },
     },
 };
@@ -42,12 +42,17 @@ impl LayoutView {
     }
 
     fn update_layout(&mut self) {
-        Self::calculate_node_size(&self.root, LayoutSize::new(CONTENT_AREA_WIDTH, 0));
+        Self::calculate_node_size(
+            &self.root,
+            LayoutSize {
+                width: CONTENT_AREA_WIDTH,
+                height: 0,
+            },
+        );
         Self::calculate_node_position(
             &self.root,
-            LayoutPoint::new(0, 0),
+            LayoutPoint { x: 0, y: 0 },
             LayoutObjectKind::Block,
-            None,
             None,
         );
     }
@@ -76,24 +81,18 @@ impl LayoutView {
         node: &Option<Rc<RefCell<LayoutObject>>>,
         parent_point: LayoutPoint,
         prev_sibling_kind: LayoutObjectKind,
-        prev_sibling_point: Option<LayoutPoint>,
-        prev_sibling_size: Option<LayoutSize>,
+        prev_sibling_rect: Option<LayoutRect>,
     ) {
         let Some(node) = node else { return };
 
-        node.borrow_mut().compute_position(
-            parent_point,
-            prev_sibling_kind,
-            prev_sibling_point,
-            prev_sibling_size,
-        );
+        node.borrow_mut()
+            .compute_position(parent_point, prev_sibling_kind, prev_sibling_rect);
 
         let first_child = node.borrow().first_child();
         Self::calculate_node_position(
             &first_child,
             node.borrow().point(),
             LayoutObjectKind::Block,
-            None,
             None,
         );
 
@@ -102,8 +101,7 @@ impl LayoutView {
             &next_sibling,
             parent_point,
             node.borrow().kind(),
-            Some(node.borrow().point()),
-            Some(node.borrow().size()),
+            Some(node.borrow().rect()),
         );
     }
 
@@ -125,6 +123,36 @@ impl LayoutView {
         Self::paint_node(&self.root, &mut display_items);
 
         display_items
+    }
+
+    pub fn find_node_by_position(
+        &self,
+        position: LayoutPoint,
+    ) -> Option<Rc<RefCell<LayoutObject>>> {
+        Self::find_node_by_position_internal(&self.root(), position)
+    }
+
+    fn find_node_by_position_internal(
+        node: &Option<Rc<RefCell<LayoutObject>>>,
+        position: LayoutPoint,
+    ) -> Option<Rc<RefCell<LayoutObject>>> {
+        let node = node.as_ref()?;
+
+        let res = Self::find_node_by_position_internal(&node.borrow().first_child(), position);
+        if res.is_some() {
+            return res;
+        }
+
+        let res = Self::find_node_by_position_internal(&node.borrow().next_sibling(), position);
+        if res.is_some() {
+            return res;
+        }
+
+        if node.borrow().rect().is_hit(position) {
+            return Some(node.clone());
+        }
+
+        None
     }
 }
 

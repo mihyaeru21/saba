@@ -27,8 +27,7 @@ pub struct LayoutObject {
     next_sibling: Option<Rc<RefCell<LayoutObject>>>,
     parent: Weak<RefCell<LayoutObject>>,
     style: ComputedStyle,
-    point: LayoutPoint,
-    size: LayoutSize,
+    rect: LayoutRect,
 }
 
 impl LayoutObject {
@@ -45,8 +44,13 @@ impl LayoutObject {
             next_sibling: None,
             parent,
             style: ComputedStyle::default(),
-            point: LayoutPoint::new(0, 0),
-            size: LayoutSize::new(0, 0),
+            rect: LayoutRect {
+                point: LayoutPoint { x: 0, y: 0 },
+                size: LayoutSize {
+                    width: 0,
+                    height: 0,
+                },
+            },
         }
     }
 
@@ -82,12 +86,16 @@ impl LayoutObject {
         self.style.clone()
     }
 
+    pub fn rect(&self) -> LayoutRect {
+        self.rect
+    }
+
     pub fn point(&self) -> LayoutPoint {
-        self.point
+        self.rect.point
     }
 
     pub fn size(&self) -> LayoutSize {
-        self.size
+        self.rect.size
     }
 
     pub fn is_node_selected(&self, selector: &Selector) -> bool {
@@ -187,11 +195,14 @@ impl LayoutObject {
     }
 
     pub fn compute_size(&mut self, parent_size: LayoutSize) {
-        let mut size = LayoutSize::new(0, 0);
+        let mut size = LayoutSize {
+            width: 0,
+            height: 0,
+        };
 
         match self.kind() {
             LayoutObjectKind::Block => {
-                size.set_width(parent_size.width());
+                size.width = parent_size.width;
 
                 // すべての子ノードの高さを足し合わせた結果が高さになる。
                 // ただし、インライン要素が横に並んでいる場合は注意が必要
@@ -202,13 +213,13 @@ impl LayoutObject {
                     if prev_child_kind == LayoutObjectKind::Block
                         || c.borrow().kind() == LayoutObjectKind::Block
                     {
-                        height += c.borrow().size.height();
+                        height += c.borrow().size().height;
                     }
 
                     prev_child_kind = c.borrow().kind();
                     child = c.borrow().next_sibling();
                 }
-                size.set_height(height);
+                size.height = height;
             }
             LayoutObjectKind::Inline => {
                 // すべての子ノードの高さと横幅を足し合わせた結果が現在のノードの高さと横幅とになる
@@ -217,12 +228,12 @@ impl LayoutObject {
                 let mut child = self.first_child();
                 while let Some(c) = child {
                     let c = c.borrow();
-                    width += c.size.width();
-                    height += c.size.height();
+                    width += c.size().width;
+                    height += c.size().height;
                     child = c.next_sibling();
                 }
-                size.set_width(width);
-                size.set_height(height);
+                size.width = width;
+                size.height = height;
             }
             LayoutObjectKind::Text => {
                 if let NodeKind::Text(t) = self.node_kind() {
@@ -233,58 +244,57 @@ impl LayoutObject {
                     };
                     let width = CHAR_WIDTH * ratio * t.len() as i64;
                     if width > CONTENT_AREA_WIDTH {
-                        size.set_width(CONTENT_AREA_WIDTH);
+                        size.width = CONTENT_AREA_WIDTH;
                         let line_num = if width.wrapping_rem(CONTENT_AREA_WIDTH) == 0 {
                             width.wrapping_div(CONTENT_AREA_WIDTH)
                         } else {
                             width.wrapping_div(CONTENT_AREA_WIDTH) + 1
                         };
-                        size.set_height(CHAR_HEIGHT_WITH_PADDING * ratio * line_num);
+                        size.height = CHAR_HEIGHT_WITH_PADDING * ratio * line_num;
                     } else {
-                        size.set_width(width);
-                        size.set_height(CHAR_HEIGHT_WITH_PADDING * ratio);
+                        size.width = width;
+                        size.height = CHAR_HEIGHT_WITH_PADDING * ratio;
                     }
                 }
             }
         }
 
-        self.size = size;
+        self.rect.size = size;
     }
 
     pub fn compute_position(
         &mut self,
         parent_point: LayoutPoint,
         prev_sibling_kind: LayoutObjectKind,
-        prev_sibling_point: Option<LayoutPoint>,
-        prev_sibling_size: Option<LayoutSize>,
+        prev_sibling_rect: Option<LayoutRect>,
     ) {
-        let mut point = LayoutPoint::new(0, 0);
+        let mut point = LayoutPoint { x: 0, y: 0 };
 
         match (self.kind(), prev_sibling_kind) {
             (LayoutObjectKind::Block, _) | (_, LayoutObjectKind::Block) => {
-                if let (Some(size), Some(pos)) = (prev_sibling_size, prev_sibling_point) {
-                    point.set_y(pos.y() + size.height());
+                if let Some(LayoutRect { point: pos, size }) = prev_sibling_rect {
+                    point.y = pos.y + size.height;
                 } else {
-                    point.set_y(parent_point.y());
+                    point.y = parent_point.y;
                 }
-                point.set_x(parent_point.x());
+                point.x = parent_point.x;
             }
             (LayoutObjectKind::Inline, LayoutObjectKind::Inline) => {
-                if let (Some(size), Some(pos)) = (prev_sibling_size, prev_sibling_point) {
-                    point.set_x(pos.x() + size.width());
-                    point.set_y(pos.y());
+                if let Some(LayoutRect { point: pos, size }) = prev_sibling_rect {
+                    point.x = pos.x + size.width;
+                    point.y = pos.y;
                 } else {
-                    point.set_x(parent_point.x());
-                    point.set_y(parent_point.y());
+                    point.x = parent_point.x;
+                    point.y = parent_point.y;
                 }
             }
             _ => {
-                point.set_x(parent_point.x());
-                point.set_y(parent_point.y());
+                point.x = parent_point.x;
+                point.y = parent_point.y;
             }
         }
 
-        self.point = point;
+        self.rect.point = point;
     }
 
     pub fn paint(&mut self) -> Vec<DisplayItem> {
@@ -297,8 +307,7 @@ impl LayoutObject {
                 if let NodeKind::Element(_) = self.node_kind() {
                     return vec![DisplayItem::Rect {
                         style: self.style(),
-                        layout_point: self.point(),
-                        layout_size: self.size(),
+                        layout_rect: self.rect,
                     }];
                 }
             }
@@ -326,10 +335,10 @@ impl LayoutObject {
                         let item = DisplayItem::Text {
                             text: line,
                             style: self.style(),
-                            layout_point: LayoutPoint::new(
-                                self.point().x,
-                                self.point.y + CHAR_HEIGHT_WITH_PADDING * i as i64,
-                            ),
+                            layout_point: LayoutPoint {
+                                x: self.rect.point.x,
+                                y: self.rect.point.y + CHAR_HEIGHT_WITH_PADDING * i as i64,
+                            },
                         };
                         v.push(item);
                     }
@@ -358,57 +367,27 @@ pub enum LayoutObjectKind {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct LayoutPoint {
-    x: i64,
-    y: i64,
-}
-
-impl LayoutPoint {
-    pub fn new(x: i64, y: i64) -> Self {
-        Self { x, y }
-    }
-
-    pub fn x(&self) -> i64 {
-        self.x
-    }
-
-    pub fn y(&self) -> i64 {
-        self.y
-    }
-
-    pub fn set_x(&mut self, x: i64) {
-        self.x = x;
-    }
-
-    pub fn set_y(&mut self, y: i64) {
-        self.y = y;
-    }
+    pub x: i64,
+    pub y: i64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct LayoutSize {
-    width: i64,
-    height: i64,
+    pub width: i64,
+    pub height: i64,
 }
 
-impl LayoutSize {
-    pub fn new(width: i64, height: i64) -> Self {
-        Self { width, height }
-    }
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct LayoutRect {
+    pub point: LayoutPoint,
+    pub size: LayoutSize,
+}
 
-    pub fn width(&self) -> i64 {
-        self.width
-    }
-
-    pub fn height(&self) -> i64 {
-        self.height
-    }
-
-    pub fn set_width(&mut self, width: i64) {
-        self.width = width;
-    }
-
-    pub fn set_height(&mut self, height: i64) {
-        self.height = height;
+impl LayoutRect {
+    pub fn is_hit(&self, point: LayoutPoint) -> bool {
+        let is_hit_x = self.point.x <= point.x && point.x <= (self.point.x + self.size.width);
+        let is_hit_y = self.point.y <= point.y && point.y <= (self.point.y + self.size.height);
+        is_hit_x && is_hit_y
     }
 }
 
